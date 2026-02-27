@@ -1,7 +1,13 @@
 from flask import Flask, request, redirect, session, render_template_string
+from flask_socketio import SocketIO
+from rooms import init_socket_events
 
 app = Flask(__name__)
 app.secret_key = "super_secret_key_123"
+
+# ===== SOCKETIO =====
+socketio = SocketIO(app)
+init_socket_events(socketio)
 
 # ====== DATABASE GIẢ LẬP ======
 users = {
@@ -13,104 +19,48 @@ users = {
 # ================= LOGIN UI =================
 def render_login(error=""):
     html = """
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Đăng nhập</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:Tahoma;}
-body{display:flex;justify-content:center;align-items:center;min-height:100vh;background:#0f0f0f;overflow:hidden;}
-.container{position:relative;width:450px;height:450px;display:flex;justify-content:center;align-items:center;}
-.container i{position:absolute;inset:0;border:2px solid #fff;transition:0.5s;border-radius:20px;}
-.container i:nth-child(1){ animation:animate 7s linear infinite; }
-.container i:nth-child(2){ animation:animate 9s linear infinite; }
-.container i:nth-child(3){ animation:animate2 12s linear infinite; }
-.container:hover i{border:6px solid var(--clr);filter:drop-shadow(0 0 25px var(--clr));}
-@keyframes animate{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
-@keyframes animate2{0%{transform:rotate(360deg);}100%{transform:rotate(0deg);}}
-.login{position:absolute;width:320px;display:flex;flex-direction:column;gap:18px;}
-.login h2{font-size:2em;color:#fff;text-align:center;}
-.input-box input{width:100%;padding:12px 20px;background:rgba(255,255,255,0.05);border:2px solid #fff;border-radius:40px;font-size:1em;color:#fff;outline:none;}
-.input-box input[type="submit"]{background:linear-gradient(45deg,#0078ff,#b153d7);border:none;cursor:pointer;font-weight:bold;}
-.input-box input[type="submit"]:hover{background:linear-gradient(45deg,#7adaa5,#0078ff);box-shadow:0 0 20px #fff;}
-.input-box input::placeholder{color:rgba(255,255,255,0.7);}
-.error{color:#ff4d4d;text-align:center;font-size:14px;min-height:18px;}
-.link{text-align:center;}
-.link a{color:#7adaa5;text-decoration:none;font-size:14px;}
-</style>
-</head>
-<body>
-<div class="container">
-<i style="--clr:#4ca0ff;"></i>
-<i style="--clr:#7adaa5;"></i>
-<i style="--clr:#b153d7;"></i>
-<div class="login">
-<h2>Đăng nhập</h2>
-<div class="error">{{ error }}</div>
-
-<form method="POST">
-<div class="input-box">
-<input type="text" name="username" placeholder="Username" required>
-</div>
-
-<div class="input-box">
-<input type="password" name="password" placeholder="Password" required>
-</div>
-
-<div class="input-box">
-<input type="submit" value="Sign In">
-</div>
-</form>
-
-<div class="link">
-<a href="/register">Chưa có tài khoản? Đăng ký</a>
-</div>
-</div>
-</div>
-</body>
-</html>
-"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta charset="UTF-8">
+    <title>Đăng nhập</title>
+    </head>
+    <body>
+    <h2>Đăng nhập</h2>
+    <div style="color:red;">{{ error }}</div>
+    <form method="POST">
+    <input name="username" placeholder="Username" required><br><br>
+    <input name="password" type="password" placeholder="Password" required><br><br>
+    <button type="submit">Sign In</button>
+    </form>
+    <a href="/register">Chưa có tài khoản? Đăng ký</a>
+    </body>
+    </html>
+    """
     return render_template_string(html, error=error)
-
 
 # ================= REGISTER UI =================
 def render_register(error=""):
     html = """
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Đăng ký</title>
-<style>
-body{display:flex;justify-content:center;align-items:center;height:100vh;background:#111;color:white;font-family:Tahoma;}
-.box{background:#1f2937;padding:30px;border-radius:15px;width:320px;}
-input{width:100%;padding:10px;margin:10px 0;border:none;border-radius:8px;}
-button{width:100%;padding:10px;background:#10b981;border:none;border-radius:8px;color:white;font-weight:bold;}
-.error{color:#ef4444;text-align:center;}
-a{color:#7adaa5;text-decoration:none;}
-</style>
-</head>
-<body>
-<div class="box">
-<h2 style="text-align:center;">Đăng ký</h2>
-<div class="error">{{ error }}</div>
-
-<form method="POST">
-<input type="text" name="username" placeholder="Username" required>
-<input type="password" name="password" placeholder="Password" required>
-<button type="submit">Tạo tài khoản</button>
-</form>
-
-<p style="text-align:center;margin-top:10px;">
-<a href="/">Quay lại đăng nhập</a>
-</p>
-</div>
-</body>
-</html>
-"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta charset="UTF-8">
+    <title>Đăng ký</title>
+    </head>
+    <body>
+    <h2>Đăng ký</h2>
+    <div style="color:red;">{{ error }}</div>
+    <form method="POST">
+    <input name="username" required><br><br>
+    <input name="password" type="password" required><br><br>
+    <button type="submit">Tạo tài khoản</button>
+    </form>
+    <a href="/">Quay lại đăng nhập</a>
+    </body>
+    </html>
+    """
     return render_template_string(html, error=error)
-
 
 # ================= LOGIN =================
 @app.route("/", methods=["GET", "POST"])
@@ -121,7 +71,6 @@ def login():
 
         if username in users:
 
-            # 🔒 Kiểm tra bị khóa
             if users[username]["locked"]:
                 return render_login("Tài khoản đã bị khóa")
 
@@ -133,7 +82,6 @@ def login():
         return render_login("Sai tài khoản hoặc mật khẩu")
 
     return render_login()
-
 
 # ================= REGISTER =================
 @app.route("/register", methods=["GET", "POST"])
@@ -155,7 +103,6 @@ def register():
 
     return render_register()
 
-
 # ================= DASHBOARD =================
 @app.route("/dashboard")
 def dashboard():
@@ -165,7 +112,7 @@ def dashboard():
     role = session.get("role")
     username = session.get("user")
 
-    # 👑 ADMIN PANEL
+    # ADMIN PANEL
     if role == "admin":
         user_list = ""
 
@@ -188,13 +135,11 @@ def dashboard():
         <a href='/logout'>Logout</a>
         """
 
-    # USER / MOD VIEW
     return f"""
     <h1>Xin chào {username}</h1>
     <h2>Role: {role}</h2>
     <a href='/logout'>Logout</a>
     """
-
 
 # ================= LOCK / UNLOCK =================
 @app.route("/admin/lock/<username>")
@@ -207,7 +152,6 @@ def lock_user(username):
 
     return redirect("/dashboard")
 
-
 @app.route("/admin/unlock/<username>")
 def unlock_user(username):
     if session.get("role") != "admin":
@@ -218,13 +162,12 @@ def unlock_user(username):
 
     return redirect("/dashboard")
 
-
 # ================= LOGOUT =================
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect("/")
 
-
+# ================= RUN =================
 if __name__ == "__main__":
-    app.run(debug=True)
+    socketio.run(app, debug=True)
